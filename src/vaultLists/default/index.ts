@@ -1,0 +1,49 @@
+import type { VaultList } from '../../lib/types'
+import { DOMAINS } from '../../lib/constants'
+import { arbitrumVaults } from './arbitrum'
+import { arbitrumSepoliaVaults } from './arbitrumSepolia'
+import { baseVaults } from './base'
+import { baseSepoliaVaults } from './baseSepolia'
+import { gnosisVaults } from './gnosis'
+import { gnosisChiadoVaults } from './gnosisChiado'
+import { mainnetVaults } from './mainnet'
+import { optimismVaults } from './optimism'
+import { optimismSepoliaVaults } from './optimismSepolia'
+import { scrollVaults } from './scroll'
+import { scrollSepoliaVaults } from './scrollSepolia'
+import { worldVaults } from './world'
+
+const defaultVaultList: VaultList = {
+  name: 'Cabana Vault List',
+  keywords: [
+    'pooltogether',
+    'cabana',
+    'g9',
+    'ethereum',
+    'optimism',
+    'base',
+    'arbitrum',
+    'scroll',
+    'gnosis',
+    'world'
+  ],
+  version: { major: 2, minor: 21, patch: 2 },
+  timestamp: '2026-05-14T17:44:33Z',
+  logoURI: `${DOMAINS.app}/favicon.png`,
+  tokens: [
+    ...mainnetVaults,
+    ...optimismVaults,
+    ...baseVaults,
+    ...arbitrumVaults,
+    ...scrollVaults,
+    ...gnosisVaults,
+    ...worldVaults,
+    ...optimismSepoliaVaults,
+    ...baseSepoliaVaults,
+    ...arbitrumSepoliaVaults,
+    ...scrollSepoliaVaults,
+    ...gnosisChiadoVaults
+  ]
+}
+
+export default defaultVaultList
