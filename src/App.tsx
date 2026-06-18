@@ -226,6 +226,7 @@ export const App = () => {
           vaults={vaults}
           isSwitchingChain={isSwitchingSelectedChain}
           onOpenChainSelect={() => setIsChainModalOpen(true)}
+          onVaultAction={(vault, mode) => setModalState({ vault, mode })}
         />
       ) : (
         <main className="mx-auto flex max-w-[94rem] flex-col gap-9 px-4 pb-14 pt-10 sm:px-6 lg:pt-12">

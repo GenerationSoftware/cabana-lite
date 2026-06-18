@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useAccount, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
-import { maxUint256 } from 'viem'
 import { erc20Abi, vaultAbi } from '../lib/abis'
 import { CHAIN_LABELS } from '../lib/constants'
 import { formatTokenAmount, parseTokenAmount } from '../lib/format'
@@ -45,11 +44,10 @@ export const VaultActionPanel = ({ vault, data, refetch }: VaultActionPanelProps
     if (needsApproval) {
       writeContract(
         {
-          chainId: vault.chainId,
           address: data.asset,
           abi: erc20Abi,
           functionName: 'approve',
-          args: [vault.address, maxUint256]
+          args: [vault.address, parsedAmount]
         },
         { onSuccess: () => refetch() }
       )
@@ -59,7 +57,6 @@ export const VaultActionPanel = ({ vault, data, refetch }: VaultActionPanelProps
     if (mode === 'deposit') {
       writeContract(
         {
-          chainId: vault.chainId,
           address: vault.address,
           abi: vaultAbi,
           functionName: 'deposit',
@@ -70,7 +67,6 @@ export const VaultActionPanel = ({ vault, data, refetch }: VaultActionPanelProps
     } else {
       writeContract(
         {
-          chainId: vault.chainId,
           address: vault.address,
           abi: vaultAbi,
           functionName: 'withdraw',

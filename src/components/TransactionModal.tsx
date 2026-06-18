@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
-import { maxUint256, type Address } from 'viem'
+import { type Address } from 'viem'
 import { erc20Abi, vaultAbi } from '../lib/abis'
 import { CHAIN_LABELS } from '../lib/constants'
 import { formatTokenAmount, parseTokenAmount } from '../lib/format'
@@ -52,17 +52,15 @@ export const TransactionModal = (props: TransactionModalProps) => {
 
     if (needsApproval) {
       writeContract({
-        chainId: vault.chainId,
         address: data.asset,
         abi: erc20Abi,
         functionName: 'approve',
-        args: [vault.address, maxUint256]
+        args: [vault.address, parsedAmount]
       })
       return
     }
 
     writeContract({
-      chainId: vault.chainId,
       address: vault.address,
       abi: vaultAbi,
       functionName: mode,

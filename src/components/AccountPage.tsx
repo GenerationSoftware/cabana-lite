@@ -3,13 +3,17 @@ import { formatUnits } from 'viem'
 import { useAccount, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
 import { CHAIN_LABELS } from '../lib/constants'
 import { formatTokenAmount } from '../lib/format'
+import { vaultHref } from '../lib/route'
+import { useTokenPricesInUsdc } from '../lib/tokenPrices'
 import {
   getClaimRewardRequest,
   type AccountReward,
   useAccountRewards
 } from '../lib/useAccountRewards'
+import { getVaultReadId, useVaultListReads } from '../lib/useVaultReads'
 import type { VaultListToken } from '../lib/types'
 import { ChainIcon } from './ChainIcon'
+import { VaultRow } from './VaultRow'
 
 type AccountPageProps = {
   chainId: number
@@ -17,6 +21,7 @@ type AccountPageProps = {
   vaults: VaultListToken[]
   isSwitchingChain: boolean
   onOpenChainSelect: () => void
+  onVaultAction: (vault: VaultListToken, mode: 'deposit' | 'withdraw') => void
 }
 
 export const AccountPage = ({
@@ -24,19 +29,54 @@ export const AccountPage = ({
   chainLabel,
   vaults,
   isSwitchingChain,
-  onOpenChainSelect
+  onOpenChainSelect,
+  onVaultAction
 }: AccountPageProps) => {
+  const vaultListReads = useVaultListReads(vaults)
   const rewardsQuery = useAccountRewards(chainId, vaults)
   const rewards = rewardsQuery.data ?? []
   const rewardsProgress = rewardsQuery.progress
+  const depositedVaults = useMemo(() => {
+    if (!vaultListReads.data) return []
+
+    return vaults.filter((vault) => {
+      const data = vaultListReads.data?.[getVaultReadId(vault)]
+      return (data?.userAssets ?? 0n) > 0n
+    })
+  }, [vaultListReads.data, vaults])
+  const tokenPriceInputs = useMemo(() => {
+    if (!vaultListReads.data) return []
+
+    return depositedVaults.flatMap((vault) => {
+      const data = vaultListReads.data?.[getVaultReadId(vault)]
+      return [
+        {
+          address: data?.asset ?? vault.extensions?.underlyingAsset?.address,
+          decimals: vault.decimals
+        },
+        {
+          address: data?.prizeToken,
+          decimals: data?.prizeTokenDecimals
+        }
+      ]
+    })
+  }, [depositedVaults, vaultListReads.data])
+  const tokenPrices = useTokenPricesInUsdc(chainId, tokenPriceInputs, {
+    enabled: !!vaultListReads.data && depositedVaults.length > 0 && !vaultListReads.isLoading
+  })
   const groupedRewards = useMemo(() => groupRewardsByToken(rewards), [rewards])
   const hasSearchedVaults = rewardsProgress.searchedVaults > 0
   const isSearchingRewards = rewardsProgress.isSearching && !isSwitchingChain
+  const isVaultListLoading =
+    isSwitchingChain ||
+    vaultListReads.isLoading ||
+    vaultListReads.isFetching ||
+    (!vaultListReads.data && !vaultListReads.isError)
   const isLoading =
     isSwitchingChain || ((rewardsQuery.isLoading || rewardsQuery.isFetching) && !hasSearchedVaults)
 
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-9 px-4 pb-14 pt-10 sm:px-6 lg:pt-12">
+    <main className="mx-auto flex max-w-[94rem] flex-col gap-9 px-4 pb-14 pt-10 sm:px-6 lg:pt-12">
       <section className="flex flex-col items-center gap-7 text-center">
         <h1 className="font-grotesk text-[2rem] font-bold leading-none text-white sm:text-4xl lg:text-5xl">
           Account
@@ -56,6 +96,50 @@ export const AccountPage = ({
             <span className="text-pt-purple-200 lg:text-2xl">v</span>
           </button>
         </div>
+      </section>
+
+      <section className="rounded-t-2xl rounded-b-[2.5rem] bg-[#2D0C66] px-5 pb-5 pt-7">
+        <div className="mb-6 px-1 sm:px-4">
+          <h2 className="font-grotesk text-3xl font-semibold text-white">Your Vaults</h2>
+        </div>
+
+        <div className="hidden grid-cols-[minmax(0,5fr)_repeat(3,minmax(0,4fr))_minmax(0,5fr)] px-5 pb-7 text-base font-medium text-pt-purple-200 lg:grid">
+          <div>Prize Vault</div>
+          <div className="text-center">Your Deposit</div>
+          <div className="text-center">Total Deposits</div>
+          <div className="text-center">Prize Size</div>
+          <div className="text-right">
+            <span className="inline-block w-52 text-center">Manage</span>
+          </div>
+        </div>
+
+        {isVaultListLoading ? (
+          <VaultSkeleton />
+        ) : vaultListReads.isError ? (
+          <div className="rounded-2xl bg-white/5 px-5 py-8 text-center font-grotesk text-xl font-semibold text-white">
+            Vault deposits are unavailable on {CHAIN_LABELS[chainId] ?? `Chain ${chainId}`}.
+          </div>
+        ) : depositedVaults.length === 0 ? (
+          <div className="rounded-2xl bg-white/5 px-5 py-8 text-center font-grotesk text-xl font-semibold text-white">
+            No active vault deposits on {CHAIN_LABELS[chainId] ?? `Chain ${chainId}`}.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {depositedVaults.map((vault) => (
+              <VaultRow
+                key={`${vault.chainId}-${vault.address}`}
+                vault={vault}
+                data={vaultListReads.data?.[getVaultReadId(vault)]}
+                tokenPrices={tokenPrices.data}
+                isLoading={vaultListReads.isLoading || vaultListReads.isFetching || !vaultListReads.data}
+                isError={vaultListReads.isError}
+                isSwitchingChain={isSwitchingChain}
+                href={vaultHref(vault.chainId, vault.address)}
+                onAction={(mode) => onVaultAction(vault, mode)}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="rounded-t-2xl rounded-b-[2.5rem] bg-[#2D0C66] px-5 pb-5 pt-7">
@@ -255,6 +339,14 @@ const RewardSkeleton = () => (
   <div className="flex flex-col gap-3">
     {Array.from({ length: 3 }, (_, index) => (
       <div key={index} className="h-24 animate-pulse rounded-2xl bg-white/10" />
+    ))}
+  </div>
+)
+
+const VaultSkeleton = () => (
+  <div className="flex flex-col gap-3">
+    {Array.from({ length: 3 }, (_, index) => (
+      <div key={index} className="h-28 animate-pulse rounded-3xl bg-white/10 lg:h-20" />
     ))}
   </div>
 )
