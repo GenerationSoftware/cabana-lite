@@ -1,5 +1,5 @@
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CabanaLogo } from './CabanaLogo'
 import { NETWORK } from '../lib/constants'
@@ -7,10 +7,12 @@ import { accountHref, prizesHref, vaultsHref, type Route } from '../lib/route'
 
 export const Header = ({ route, chainId = NETWORK.base }: { route?: Route; chainId?: number }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const ignoreMenuClickRef = useRef(false)
+  const menuOpenedAtRef = useRef(0)
   const navClass = (isActive: boolean) =>
     `transition hover:text-pt-teal ${isActive ? 'text-pt-teal' : ''}`
   const mobileNavClass = (isActive: boolean) =>
-    `rounded-xl px-4 py-3 font-grotesk text-xl font-semibold transition ${
+    `rounded-2xl px-5 py-4 font-grotesk text-2xl font-semibold transition ${
       isActive ? 'bg-pt-purple-500 text-white' : 'text-pt-purple-100 hover:bg-white/10 hover:text-white'
     }`
   const links = [
@@ -18,6 +20,14 @@ export const Header = ({ route, chainId = NETWORK.base }: { route?: Route; chain
     { label: 'Vaults', href: vaultsHref(chainId), isActive: route?.type === 'vaults' || route?.type === 'vault' },
     { label: 'Account', href: accountHref(chainId), isActive: route?.type === 'account' }
   ]
+  const toggleMenu = () => {
+    menuOpenedAtRef.current = Date.now()
+    setIsMenuOpen((value) => !value)
+  }
+  const closeMenuFromOutside = () => {
+    if (Date.now() - menuOpenedAtRef.current < 350) return
+    setIsMenuOpen(false)
+  }
 
   return (
     <header className="sticky top-0 z-20 bg-[#21064E]">
@@ -72,8 +82,21 @@ export const Header = ({ route, chainId = NETWORK.base }: { route?: Route; chain
                   type="button"
                   aria-label="Menu"
                   aria-expanded={isMenuOpen}
-                  onClick={() => setIsMenuOpen((value) => !value)}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl text-pt-purple-100 transition hover:bg-white/10 hover:text-white"
+                  onTouchEnd={(event) => {
+                    event.preventDefault()
+                    ignoreMenuClickRef.current = true
+                    toggleMenu()
+                  }}
+                  onClick={(event) => {
+                    if (ignoreMenuClickRef.current) {
+                      event.preventDefault()
+                      ignoreMenuClickRef.current = false
+                      return
+                    }
+
+                    toggleMenu()
+                  }}
+                  className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl text-pt-purple-100 transition hover:bg-white/10 hover:text-white"
                 >
                   <span className="flex flex-col gap-1.5">
                     <span className="block h-0.5 w-7 rounded-full bg-current" />
@@ -87,20 +110,28 @@ export const Header = ({ route, chainId = NETWORK.base }: { route?: Route; chain
         </ConnectButton.Custom>
 
         {isMenuOpen && (
-          <div className="absolute right-5 top-[4.75rem] w-56 rounded-2xl border border-white/10 bg-[#2D0C66] p-2 shadow-2xl lg:hidden">
-            <nav className="flex flex-col">
-              {links.map((link) => (
-                <Link
-                  key={link.label}
-                  to={link.href}
-                  onClick={() => setIsMenuOpen(false)}
-                  className={mobileNavClass(link.isActive)}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
+          <>
+            <button
+              type="button"
+              aria-label="Close menu"
+              className="fixed inset-x-0 bottom-0 top-20 z-40 cursor-default bg-black/30 backdrop-blur-[2px] animate-[menu-backdrop-in_180ms_ease-out] lg:hidden"
+              onClick={closeMenuFromOutside}
+            />
+            <div className="fixed inset-x-4 top-20 z-50 animate-[mobile-menu-in_180ms_ease-out] rounded-b-3xl border border-t-0 border-white/10 bg-[#2D0C66] p-4 shadow-2xl lg:hidden">
+              <nav className="flex flex-col gap-2">
+                {links.map((link) => (
+                  <Link
+                    key={link.label}
+                    to={link.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={mobileNavClass(link.isActive)}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </nav>
+            </div>
+          </>
         )}
       </div>
     </header>
