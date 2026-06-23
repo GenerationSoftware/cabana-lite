@@ -18,7 +18,25 @@ import mainnetIcon from '../assets/chain/mainnet.svg'
 import optimismIcon from '../assets/chain/optimism.svg'
 
 export const DOMAINS = {
-  app: ''
+  app: '',
+  landingPage: 'https://cabana.fi',
+  protocolLandingPage: 'https://pooltogether.com',
+  docs: 'https://docs.cabana.fi',
+  protocolDocs: 'https://docs.pooltogether.com',
+  protocolDevDocs: 'https://dev.pooltogether.com',
+  governance: 'https://gov.pooltogether.com'
+} as const
+
+export const LINKS = {
+  ...DOMAINS,
+  termsOfService: `${DOMAINS.landingPage}/terms`,
+  privacyPolicy: `${DOMAINS.landingPage}/privacy`,
+  ecosystem: `${DOMAINS.protocolLandingPage}/ecosystem`,
+  discord: `${DOMAINS.protocolLandingPage}/discord`,
+  audits: `${DOMAINS.protocolDocs}/security/audits`,
+  twitter: 'https://twitter.com/PoolTogether_',
+  github: 'https://github.com/orgs/GenerationSoftware/repositories?q=pooltogether+sort%3Astars',
+  medium: 'https://medium.com/pooltogether'
 } as const
 
 export const NETWORK = {

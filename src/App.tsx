@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom'
 import { formatUnits, type Address } from 'viem'
 import { useAccount, useSwitchChain } from 'wagmi'
@@ -8,8 +8,11 @@ import { accountHref, prizesHref, vaultHref, vaultsHref, type Route } from './li
 import type { VaultListToken } from './lib/types'
 import { AccountPage } from './components/AccountPage'
 import { ConnectScreen } from './components/ConnectScreen'
+import { Footer } from './components/Footer'
 import { Header } from './components/Header'
+import { PrivacyPolicy } from './components/PrivacyPolicy'
 import { PrizeList } from './components/PrizeList'
+import { TermsOfService } from './components/TermsOfService'
 import { VaultPage } from './components/VaultPage'
 import { VaultRow } from './components/VaultRow'
 import { VaultTransactionModalHost } from './components/VaultTransactionModalHost'
@@ -115,6 +118,10 @@ export const App = () => {
       ? { type: 'prizes' }
     : location.pathname === '/account'
         ? { type: 'account' }
+    : location.pathname === '/terms'
+        ? { type: 'terms' }
+    : location.pathname === '/privacy'
+        ? { type: 'privacy' }
         : { type: 'vaults' }
   const chainFilter = readNetworkParam(searchParams)
 
@@ -200,83 +207,94 @@ export const App = () => {
     )
   }
 
-  if (!address) return <ConnectScreen />
+  if (!address && route.type !== 'terms' && route.type !== 'privacy') return <ConnectScreen />
   if (location.pathname === '/') return <Navigate to={vaultsHref(NETWORK.base)} replace />
 
   return (
-    <div className="min-h-screen bg-[#21064E] text-pt-purple-50">
+    <div className="flex min-h-screen flex-col bg-[#21064E] text-pt-purple-50">
       <Header route={route} chainId={chainFilter} />
-      {selectedVault ? (
-        <VaultPage
-          vault={selectedVault}
-          onBack={closeVault}
-          onAction={(mode) => setModalState({ vault: selectedVault, mode })}
-        />
-      ) : route.type === 'prizes' ? (
-        <PrizesPage
-          chainId={chainFilter}
-          chainLabel={selectedChainLabel}
-          isSwitchingChain={isSwitchingSelectedChain}
-          onOpenChainSelect={() => setIsChainModalOpen(true)}
-        />
-      ) : route.type === 'account' ? (
-        <AccountPage
-          chainId={chainFilter}
-          chainLabel={selectedChainLabel}
-          vaults={vaults}
-          isSwitchingChain={isSwitchingSelectedChain}
-          onOpenChainSelect={() => setIsChainModalOpen(true)}
-          onVaultAction={(vault, mode) => setModalState({ vault, mode })}
-        />
-      ) : (
-        <main className="mx-auto flex max-w-[94rem] flex-col gap-9 px-4 pb-14 pt-10 sm:px-6 lg:pt-12">
-          <section className="flex flex-col items-center gap-7 text-center">
-            <h1 className="font-grotesk text-[2rem] font-bold leading-none text-white sm:text-4xl lg:text-5xl">
-              Deposit tokens, <span className="text-pt-teal">win prizes</span>. Withdraw anytime,
-              <span className="text-pt-teal"> no loss</span>
-            </h1>
+      <div className="flex-1">
+        {route.type === 'terms' ? (
+          <LegalPage>
+            <TermsOfService className="text-sm leading-7 text-pt-purple-100 sm:text-base" />
+          </LegalPage>
+        ) : route.type === 'privacy' ? (
+          <LegalPage>
+            <PrivacyPolicy className="text-sm leading-7 text-pt-purple-100 sm:text-base" />
+          </LegalPage>
+        ) : selectedVault ? (
+          <VaultPage
+            vault={selectedVault}
+            onBack={closeVault}
+            onAction={(mode) => setModalState({ vault: selectedVault, mode })}
+          />
+        ) : route.type === 'prizes' ? (
+          <PrizesPage
+            chainId={chainFilter}
+            chainLabel={selectedChainLabel}
+            isSwitchingChain={isSwitchingSelectedChain}
+            onOpenChainSelect={() => setIsChainModalOpen(true)}
+          />
+        ) : route.type === 'account' ? (
+          <AccountPage
+            chainId={chainFilter}
+            chainLabel={selectedChainLabel}
+            vaults={vaults}
+            isSwitchingChain={isSwitchingSelectedChain}
+            onOpenChainSelect={() => setIsChainModalOpen(true)}
+            onVaultAction={(vault, mode) => setModalState({ vault, mode })}
+          />
+        ) : (
+          <main className="mx-auto flex max-w-[94rem] flex-col gap-9 px-4 pb-14 pt-10 sm:px-6 lg:pt-12">
+            <section className="flex flex-col items-center gap-7 text-center">
+              <h1 className="font-grotesk text-[2rem] font-bold leading-none text-white sm:text-4xl lg:text-5xl">
+                Deposit tokens, <span className="text-pt-teal">win prizes</span>. Withdraw anytime,
+                <span className="text-pt-teal"> no loss</span>
+              </h1>
 
-            <div className="rounded-[1.75rem] bg-[#2D0C66] px-5 py-4 shadow-[0_20px_80px_rgba(20,4,48,0.18)]">
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <ChainSelectButton
-                  chainId={chainFilter}
-                  chainLabel={selectedChainLabel}
-                  onClick={() => setIsChainModalOpen(true)}
-                  isExpanded={isChainModalOpen}
-                />
+              <div className="rounded-[1.75rem] bg-[#2D0C66] px-5 py-4 shadow-[0_20px_80px_rgba(20,4,48,0.18)]">
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <ChainSelectButton
+                    chainId={chainFilter}
+                    chainLabel={selectedChainLabel}
+                    onClick={() => setIsChainModalOpen(true)}
+                    isExpanded={isChainModalOpen}
+                  />
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <section className="rounded-t-2xl rounded-b-[2.5rem] bg-[#2D0C66] px-5 pb-5 pt-7">
-            <div className="hidden grid-cols-[minmax(0,5fr)_repeat(3,minmax(0,4fr))_minmax(0,5fr)] px-5 pb-7 text-base font-medium text-pt-purple-200 lg:grid">
-              <div>Prize Vault</div>
-              <div className="text-center">Your Deposit</div>
-              <div className="text-center">Total Deposits</div>
-              <div className="text-center">Prize Size</div>
-              <div className="text-right">
-                <span className="inline-block w-52 text-center">Manage</span>
+            <section className="rounded-t-2xl rounded-b-[2.5rem] bg-[#2D0C66] px-5 pb-5 pt-7">
+              <div className="hidden grid-cols-[minmax(0,5fr)_repeat(3,minmax(0,4fr))_minmax(0,5fr)] px-5 pb-7 text-base font-medium text-pt-purple-200 lg:grid">
+                <div>Prize Vault</div>
+                <div className="text-center">Your Deposit</div>
+                <div className="text-center">Total Deposits</div>
+                <div className="text-center">Prize Size</div>
+                <div className="text-right">
+                  <span className="inline-block w-52 text-center">Manage</span>
+                </div>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-3">
-              {vaults.map((vault) => (
-                <VaultRow
-                  key={`${vault.chainId}-${vault.address}`}
-                  vault={vault}
-                  data={vaultListReads.data?.[getVaultReadId(vault)]}
-                  tokenPrices={tokenPrices.data}
-                  isLoading={vaultListReads.isLoading || vaultListReads.isFetching || !vaultListReads.data}
-                  isError={vaultListReads.isError}
-                  isSwitchingChain={isSwitchingSelectedChain}
-                  href={vaultHref(vault.chainId, vault.address)}
-                  onAction={(mode) => setModalState({ vault, mode })}
-                />
-              ))}
-            </div>
-          </section>
-        </main>
-      )}
+              <div className="flex flex-col gap-3">
+                {vaults.map((vault) => (
+                  <VaultRow
+                    key={`${vault.chainId}-${vault.address}`}
+                    vault={vault}
+                    data={vaultListReads.data?.[getVaultReadId(vault)]}
+                    tokenPrices={tokenPrices.data}
+                    isLoading={vaultListReads.isLoading || vaultListReads.isFetching || !vaultListReads.data}
+                    isError={vaultListReads.isError}
+                    isSwitchingChain={isSwitchingSelectedChain}
+                    href={vaultHref(vault.chainId, vault.address)}
+                    onAction={(mode) => setModalState({ vault, mode })}
+                  />
+                ))}
+              </div>
+            </section>
+          </main>
+        )}
+      </div>
+      <Footer />
       {modalState && (
         <VaultTransactionModalHost
           vault={modalState.vault}
@@ -296,6 +314,14 @@ export const App = () => {
     </div>
   )
 }
+
+const LegalPage = ({ children }: { children: ReactNode }) => (
+  <main className="mx-auto w-full max-w-5xl px-4 pb-20 pt-10 sm:px-6 lg:pt-12">
+    <article className="rounded-2xl border border-white/10 bg-[#2D0C66] px-5 py-7 shadow-[0_20px_80px_rgba(20,4,48,0.18)] sm:px-8 sm:py-10 lg:px-12">
+      {children}
+    </article>
+  </main>
+)
 
 type ChainSelectModalProps = {
   chains: number[]
