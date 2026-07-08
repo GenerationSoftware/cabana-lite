@@ -38,8 +38,11 @@ export const TransactionModal = (props: TransactionModalProps) => {
 
   const symbol = vault.extensions?.underlyingAsset?.symbol ?? vault.symbol
   const isWrongChain = connectedChainId !== vault.chainId
-  const needsApproval = mode === 'deposit' && parsedAmount > 0n && (data?.allowance ?? 0n) < parsedAmount
-  const disabled = !data || parsedAmount <= 0n || isPending || isConfirming
+  const isShutdown = data?.isPrizePoolShutdown ?? false
+  const activeMode = isShutdown && mode === 'deposit' ? 'withdraw' : mode
+  const modes: Array<'deposit' | 'withdraw'> = isShutdown ? ['withdraw'] : ['deposit', 'withdraw']
+  const needsApproval = activeMode === 'deposit' && parsedAmount > 0n && (data?.allowance ?? 0n) < parsedAmount
+  const disabled = !data || parsedAmount <= 0n || isPending || isConfirming || (isShutdown && activeMode === 'deposit')
 
   useEffect(() => {
     if (isSuccess) {
@@ -47,8 +50,15 @@ export const TransactionModal = (props: TransactionModalProps) => {
     }
   }, [isSuccess, onSettled])
 
+  useEffect(() => {
+    if (isShutdown && mode === 'deposit') {
+      onModeChange('withdraw')
+    }
+  }, [isShutdown, mode, onModeChange])
+
   const submit = () => {
     if (!data?.asset || parsedAmount <= 0n) return
+    if (isShutdown && activeMode === 'deposit') return
 
     if (needsApproval) {
       writeContract({
@@ -63,9 +73,9 @@ export const TransactionModal = (props: TransactionModalProps) => {
     writeContract({
       address: vault.address,
       abi: vaultAbi,
-      functionName: mode,
+      functionName: activeMode,
       args:
-        mode === 'deposit'
+        activeMode === 'deposit'
           ? [parsedAmount, account]
           : [parsedAmount, account, account]
     })
@@ -77,7 +87,7 @@ export const TransactionModal = (props: TransactionModalProps) => {
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h2 className="font-grotesk text-3xl font-bold text-white">
-              {mode === 'deposit' ? 'Deposit' : 'Withdraw'}
+              {activeMode === 'deposit' ? 'Deposit' : 'Withdraw'}
             </h2>
             <p className="mt-1 text-sm text-pt-purple-200">
               {vault.name} on {CHAIN_LABELS[vault.chainId]}
@@ -92,8 +102,8 @@ export const TransactionModal = (props: TransactionModalProps) => {
           </button>
         </div>
 
-        <div className="mb-5 grid grid-cols-2 rounded-lg bg-pt-purple-900/60 p-1">
-          {(['deposit', 'withdraw'] as const).map((tab) => (
+        <div className={`mb-5 grid rounded-lg bg-pt-purple-900/60 p-1 ${isShutdown ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          {modes.map((tab) => (
             <button
               key={tab}
               type="button"
@@ -102,7 +112,7 @@ export const TransactionModal = (props: TransactionModalProps) => {
                 onModeChange(tab)
               }}
               className={`rounded-md px-3 py-2 font-semibold capitalize ${
-                mode === tab ? 'bg-pt-purple-500 text-white' : 'text-pt-purple-200'
+                activeMode === tab ? 'bg-pt-purple-500 text-white' : 'text-pt-purple-200'
               }`}
             >
               {tab}
@@ -171,7 +181,7 @@ export const TransactionModal = (props: TransactionModalProps) => {
                 ? 'Confirming...'
                 : needsApproval
                   ? 'Approve'
-                  : mode === 'deposit'
+                  : activeMode === 'deposit'
                     ? 'Deposit'
                     : 'Withdraw'}
             </button>

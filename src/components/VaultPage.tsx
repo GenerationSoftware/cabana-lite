@@ -36,6 +36,7 @@ export const VaultPage = ({ vault, onBack, onAction }: VaultPageProps) => {
   const isShutdown = data?.isPrizePoolShutdown ?? prizeData?.isShutdown ?? false
   const shutdownBalance = data?.shutdownBalance ?? 0n
   const hasShutdownClaim = shutdownBalance > 0n
+  const canDeposit = !!data && isCurrentChain && !isLoading && !isShutdown
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6">
@@ -78,7 +79,7 @@ export const VaultPage = ({ vault, onBack, onAction }: VaultPageProps) => {
           </div>
         )}
         <div className="flex w-full max-w-md gap-3">
-          {!isShutdown && (
+          {canDeposit && (
             <button
               type="button"
               onClick={() => onAction('deposit')}

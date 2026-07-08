@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { decodeFunctionResult, encodeFunctionData, publicActions, type Address } from 'viem'
-import { useAccount, useConnectorClient } from 'wagmi'
+import { useAccount, useChainId, useConnectorClient } from 'wagmi'
 import { erc20Abi, prizePoolAbi, vaultAbi } from './abis'
 import { PRIZE_POOL_BY_CHAIN, SUPPORTED_CHAINS } from './constants'
 import type { PrizePoolReadData, VaultListToken, VaultReadData } from './types'
@@ -8,15 +8,21 @@ import type { PrizePoolReadData, VaultListToken, VaultReadData } from './types'
 const READ_CACHE_TTL_MS = 60_000
 
 export const useWalletPublicClient = (chainId?: number) => {
-  const { chain, status } = useAccount()
-  const { data: walletClient } = useConnectorClient({ chainId })
+  const { status } = useAccount()
+  const currentChainId = useChainId()
+  const { data: walletClient } = useConnectorClient({
+    chainId,
+    query: {
+      enabled: !!chainId && (status === 'connected' || status === 'reconnecting')
+    }
+  })
   const supportedChain = SUPPORTED_CHAINS.find((supportedChain) => supportedChain.id === chainId)
 
   if (
-    status !== 'connected' ||
+    (status !== 'connected' && status !== 'reconnecting') ||
     !walletClient ||
     !supportedChain ||
-    chain?.id !== chainId ||
+    currentChainId !== chainId ||
     walletClient.chain?.id !== chainId
   ) {
     return undefined
@@ -490,9 +496,9 @@ const readShutdownBalance = async (
     const result = await publicClient.call({
       to: prizePool,
       data: encodeFunctionData({
-      abi: prizePoolAbi,
-      functionName: 'shutdownBalanceOf',
-      args: [vault, userAddress]
+        abi: prizePoolAbi,
+        functionName: 'shutdownBalanceOf',
+        args: [vault, userAddress]
       })
     })
 

@@ -44,6 +44,7 @@ export const VaultRow = ({
   const isShutdown = data?.isPrizePoolShutdown ?? false
   const shutdownBalance = data?.shutdownBalance ?? 0n
   const hasShutdownClaim = shutdownBalance > 0n
+  const canDeposit = !!data && isCurrentChain && !isSwitchingChain && !isShutdown
 
   return (
     <article
@@ -165,7 +166,7 @@ export const VaultRow = ({
               Withdraw
             </button>
           )}
-          {!isShutdown && (
+          {canDeposit && (
             <button
               type="button"
               onClick={() => onAction('deposit')}

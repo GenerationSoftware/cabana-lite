@@ -101,7 +101,7 @@ const ChainSelectButton = ({
 )
 
 export const App = () => {
-  const { address, chain } = useAccount()
+  const { address, chain, status } = useAccount()
   const { switchChain } = useSwitchChain()
   const location = useLocation()
   const navigate = useNavigate()
@@ -129,12 +129,14 @@ export const App = () => {
   useEffect(() => {
     if (
       !address ||
+      status !== 'connected' ||
       (route.type !== 'vaults' && route.type !== 'prizes' && route.type !== 'account')
     ) {
       return
     }
+    if (chain?.id === chainFilter) return
     switchChain({ chainId: chainFilter })
-  }, [address, chainFilter, route.type, switchChain])
+  }, [address, chain?.id, chainFilter, route.type, status, switchChain])
 
   useEffect(() => {
     if (!address || location.pathname !== '/') return
