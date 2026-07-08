@@ -19,6 +19,7 @@ import { VaultTransactionModalHost } from './components/VaultTransactionModalHos
 import { ChainIcon } from './components/ChainIcon'
 import { getVaultReadId, usePrizePoolReads, useVaultListReads } from './lib/useVaultReads'
 import { useTokenPricesInUsdc } from './lib/tokenPrices'
+import { useVaultTwabRewardTokens } from './lib/useAccountRewards'
 
 type ModalState = {
   vault: VaultListToken
@@ -155,6 +156,7 @@ export const App = () => {
   }, [chainFilter])
   const vaultListReadVaults = route.type === 'vaults' ? vaults : []
   const vaultListReads = useVaultListReads(vaultListReadVaults)
+  const vaultRewardTokens = useVaultTwabRewardTokens(chainFilter, vaults)
   const tokenPriceInputs = useMemo(() => {
     if (!vaultListReads.data) return []
 
@@ -269,7 +271,7 @@ export const App = () => {
                 <div>Prize Vault</div>
                 <div className="text-center">Your Deposit</div>
                 <div className="text-center">Total Deposits</div>
-                <div className="text-center">Prize Size</div>
+                <div className="text-center">Prize</div>
                 <div className="text-right">
                   <span className="inline-block w-52 text-center">Manage</span>
                 </div>
@@ -286,6 +288,7 @@ export const App = () => {
                     isError={vaultListReads.isError}
                     isSwitchingChain={isSwitchingSelectedChain}
                     href={vaultHref(vault.chainId, vault.address)}
+                    rewardTokens={vaultRewardTokens.data?.[vault.address.toLowerCase()]}
                     onAction={(mode) => setModalState({ vault, mode })}
                   />
                 ))}

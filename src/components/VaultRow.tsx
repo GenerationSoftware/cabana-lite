@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 import { POOL_STAKING_VAULTS } from '../lib/constants'
 import { formatTokenAmount, formatUsdcValue } from '../lib/format'
+import type { VaultTwabRewardToken } from '../lib/useAccountRewards'
 import type { VaultListToken, VaultReadData } from '../lib/types'
 
 interface VaultRowProps {
@@ -12,10 +13,21 @@ interface VaultRowProps {
   isError: boolean
   isSwitchingChain: boolean
   href: string
+  rewardTokens?: VaultTwabRewardToken[]
   onAction: (mode: 'deposit' | 'withdraw') => void
 }
 
-export const VaultRow = ({ vault, data, tokenPrices, isLoading, isError, isSwitchingChain, href, onAction }: VaultRowProps) => {
+export const VaultRow = ({
+  vault,
+  data,
+  tokenPrices,
+  isLoading,
+  isError,
+  isSwitchingChain,
+  href,
+  rewardTokens,
+  onAction
+}: VaultRowProps) => {
   const { address, chain } = useAccount()
   const isCurrentChain = chain?.id === vault.chainId
   const metricFallback = !address ? '-' : !isCurrentChain && !isSwitchingChain ? 'Switch chain' : undefined
@@ -25,6 +37,7 @@ export const VaultRow = ({ vault, data, tokenPrices, isLoading, isError, isSwitc
   const assetAddress = data?.asset ?? vault.extensions?.underlyingAsset?.address
   const assetPrice = assetAddress ? tokenPrices?.[assetAddress.toLowerCase()] : undefined
   const prizeTokenPrice = data?.prizeToken ? tokenPrices?.[data.prizeToken.toLowerCase()] : undefined
+  const rewardLabel = getRewardTokenLabel(rewardTokens)
 
   return (
     <article
@@ -85,7 +98,7 @@ export const VaultRow = ({ vault, data, tokenPrices, isLoading, isError, isSwitc
         }
       />
       <Metric
-        label="Prize size"
+        label="Prize"
         isLoading={isMetricLoading && !metricFallback}
         subValue={
           !metricFallback && !isMetricLoading
@@ -104,6 +117,7 @@ export const VaultRow = ({ vault, data, tokenPrices, isLoading, isError, isSwitc
                   symbol: data?.prizeTokenSymbol
                 })
         }
+        extraValue={!metricFallback && !isMetricLoading ? rewardLabel : undefined}
       />
       <div className="min-w-0">
         {isError && isCurrentChain && (
@@ -134,7 +148,19 @@ export const VaultRow = ({ vault, data, tokenPrices, isLoading, isError, isSwitc
   )
 }
 
-const Metric = ({ label, value, subValue, isLoading }: { label: string; value?: string; subValue?: string; isLoading?: boolean }) => (
+const Metric = ({
+  label,
+  value,
+  subValue,
+  extraValue,
+  isLoading
+}: {
+  label: string
+  value?: string
+  subValue?: string
+  extraValue?: string
+  isLoading?: boolean
+}) => (
   <div className="flex items-center justify-between gap-4 rounded-lg bg-pt-purple-900/30 px-3 py-3 text-right lg:block lg:bg-transparent lg:px-0 lg:py-0 lg:text-center">
     <div className="text-sm font-medium text-pt-purple-200 lg:hidden">{label}</div>
     <div className="mt-0 flex min-h-[2.25rem] flex-col items-end justify-center gap-1 text-lg font-semibold leading-none text-pt-purple-50 lg:mt-0 lg:items-center">
@@ -144,11 +170,25 @@ const Metric = ({ label, value, subValue, isLoading }: { label: string; value?: 
         <>
           <span>{value}</span>
           {subValue && <span className="text-xs font-medium text-pt-purple-200">{subValue}</span>}
+          {extraValue && (
+            <span className="rounded-full bg-pt-teal/20 px-2.5 py-1 text-xs font-bold uppercase leading-none text-pt-teal">
+              {extraValue}
+            </span>
+          )}
         </>
       )}
     </div>
   </div>
 )
+
+const getRewardTokenLabel = (rewardTokens?: VaultTwabRewardToken[]) => {
+  if (!rewardTokens?.length) return undefined
+
+  const symbols = Array.from(new Set(rewardTokens.map((token) => token.symbol))).filter(Boolean)
+  if (!symbols.length) return undefined
+
+  return `+ ${symbols.join(' + ')} rewards!`
+}
 
 const LoadingIndicator = () => (
   <span className="flex items-center gap-1.5" aria-label="Loading">

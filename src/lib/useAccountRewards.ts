@@ -15,6 +15,7 @@ const READ_CACHE_TTL_MS = 45_000
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const MAX_REWARD_MULTICALLS_PER_BATCH = 80
 const MAX_VAULTS_PER_REWARD_BATCH = 4
+const MAX_REGULAR_PROMOTION_SEARCH_ID = 10_000n
 
 export type AccountReward = {
   id: string
@@ -31,6 +32,7 @@ export type AccountReward = {
 }
 
 type PromotionInfo = {
+  creator?: Address
   startTimestamp?: bigint
   numberOfEpochs?: number
   epochDuration?: number
@@ -47,6 +49,12 @@ export type AccountRewardsProgress = {
 type AccountRewardsSnapshot = {
   rewards: AccountReward[]
   progress: AccountRewardsProgress
+}
+
+export type VaultTwabRewardToken = {
+  address: Address
+  symbol: string
+  decimals: number
 }
 
 export const useAccountRewards = (chainId: number, vaults: VaultListToken[]) => {
@@ -79,8 +87,13 @@ export const useAccountRewards = (chainId: number, vaults: VaultListToken[]) => 
 
       setSnapshot([], { searchedVaults: 0, totalVaults: vaults.length, isSearching: true })
 
-      // Vault-specific rewards do not expose an enumerable promotion id range on-chain.
-      // Pool-wide rewards do, so this contract-only page can discover those without logs.
+      const regularRewards = await readRegularRewards(
+        publicClient,
+        chainId,
+        userAddress,
+        vaults,
+        signal
+      )
       const poolWideRewards = await readPoolWideRewards(
         publicClient,
         chainId,
@@ -88,14 +101,14 @@ export const useAccountRewards = (chainId: number, vaults: VaultListToken[]) => 
         vaults,
         signal,
         ({ rewards, searchedVaults, totalVaults }) => {
-          setSnapshot(rewards, {
+          setSnapshot([...regularRewards, ...rewards].filter((reward) => reward.amount > 0n), {
             searchedVaults,
             totalVaults,
             isSearching: searchedVaults < totalVaults
           })
         }
       )
-      const rewards = poolWideRewards.filter((reward) => reward.amount > 0n)
+      const rewards = [...regularRewards, ...poolWideRewards].filter((reward) => reward.amount > 0n)
       setSnapshot(rewards, {
         searchedVaults: vaults.length,
         totalVaults: vaults.length,
@@ -110,6 +123,66 @@ export const useAccountRewards = (chainId: number, vaults: VaultListToken[]) => 
     data: query.data ?? snapshot.rewards,
     progress: snapshot.progress
   }
+}
+
+export const useVaultTwabRewardTokens = (chainId: number, vaults: VaultListToken[]) => {
+  const { chain } = useAccount()
+  const publicClient = useWalletPublicClient(chainId)
+  const isCurrentChain = chain?.id === chainId
+  const vaultAddresses = vaults.map((vault) => vault.address.toLowerCase()).join(',')
+
+  return useQuery({
+    queryKey: ['vaultTwabRewardTokens', chainId, vaultAddresses],
+    enabled: !!publicClient && isCurrentChain && vaults.length > 0,
+    staleTime: READ_CACHE_TTL_MS,
+    gcTime: READ_CACHE_TTL_MS,
+    retry: false,
+    queryFn: async (): Promise<Record<string, VaultTwabRewardToken[]>> => {
+      if (!publicClient) throw new Error('Wallet is not connected.')
+
+      const promotions = await readRegularPromotionInfos(publicClient, chainId)
+      const currentTimestamp = Math.floor(Date.now() / 1000)
+      const vaultAddressSet = new Set(vaults.map((vault) => vault.address.toLowerCase()))
+      const activePromotions = promotions.filter((promotion) => {
+        if (!promotion.vault || !promotion.token) return false
+        if (!vaultAddressSet.has(promotion.vault.toLowerCase())) return false
+        if (!isRewardToken(chainId, promotion.token)) return false
+        if (!promotion.startTimestamp || !promotion.numberOfEpochs || !promotion.epochDuration) {
+          return false
+        }
+
+        const startsAt = Number(promotion.startTimestamp)
+        const endsAt = startsAt + promotion.epochDuration * promotion.numberOfEpochs
+        return startsAt <= currentTimestamp && currentTimestamp < endsAt
+      })
+      const tokens = await readRewardTokenMetadata(
+        publicClient,
+        activePromotions.flatMap((promotion) => (promotion.token ? [promotion.token] : []))
+      )
+      const rewardsByVault: Record<string, VaultTwabRewardToken[]> = {}
+
+      activePromotions.forEach((promotion) => {
+        if (!promotion.vault || !promotion.token) return
+
+        const vaultKey = promotion.vault.toLowerCase()
+        const tokenKey = promotion.token.toLowerCase()
+        const existingTokens = rewardsByVault[vaultKey] ?? []
+
+        if (existingTokens.some((token) => token.address.toLowerCase() === tokenKey)) return
+
+        rewardsByVault[vaultKey] = [
+          ...existingTokens,
+          {
+            address: promotion.token,
+            symbol: tokens[tokenKey]?.symbol ?? 'TOKEN',
+            decimals: tokens[tokenKey]?.decimals ?? 18
+          }
+        ]
+      })
+
+      return rewardsByVault
+    }
+  })
 }
 
 export const getClaimRewardRequest = (
@@ -298,6 +371,129 @@ const readPoolWideRewards = async (
   return rewards
 }
 
+const readRegularRewards = async (
+  publicClient: ReturnType<typeof useWalletPublicClient>,
+  chainId: number,
+  userAddress: Address,
+  vaults: VaultListToken[],
+  signal: AbortSignal
+): Promise<AccountReward[]> => {
+  const twabRewardsAddress = TWAB_REWARDS_ADDRESSES[chainId]
+  if (!publicClient || !twabRewardsAddress) return []
+
+  const vaultsByAddress = new Map(vaults.map((vault) => [vault.address.toLowerCase(), vault]))
+  const claimablePromotions = (await readRegularPromotionInfos(publicClient, chainId))
+    .map((promotion) => ({ ...promotion, epochs: getPromotionEpochs(promotion) }))
+    .filter((promotion) => {
+      if (!promotion.vault || !promotion.token || promotion.epochs.length === 0) return false
+      if (!vaultsByAddress.has(promotion.vault.toLowerCase())) return false
+      return isRewardToken(chainId, promotion.token)
+    })
+
+  if (!claimablePromotions.length || signal.aborted) return []
+
+  const tokens = await readRewardTokenMetadata(
+    publicClient,
+    claimablePromotions.flatMap((promotion) => (promotion.token ? [promotion.token] : []))
+  )
+  const rewards: AccountReward[] = []
+
+  for (let index = 0; index < claimablePromotions.length; index += MAX_REWARD_MULTICALLS_PER_BATCH) {
+    if (signal.aborted) return rewards
+
+    const promotionBatch = claimablePromotions.slice(index, index + MAX_REWARD_MULTICALLS_PER_BATCH)
+    const results = await publicClient.multicall({
+      allowFailure: true,
+      contracts: promotionBatch.map((promotion) => ({
+        address: twabRewardsAddress,
+        abi: twabRewardsAbi,
+        functionName: 'getRewardsAmount',
+        args: [userAddress, promotion.id, promotion.epochs]
+      }))
+    })
+
+    promotionBatch.forEach((promotion, promotionIndex) => {
+      if (!promotion.vault || !promotion.token) return
+
+      const rewardAmounts = getSuccessfulResult<bigint[]>(results[promotionIndex])
+      const vault = vaultsByAddress.get(promotion.vault.toLowerCase())
+      const epochRewards: Record<number, bigint> = {}
+
+      if (!rewardAmounts || !vault) return
+
+      promotion.epochs.forEach((epoch, rewardIndex) => {
+        const amount = rewardAmounts[rewardIndex] ?? 0n
+        if (amount > 0n) epochRewards[epoch] = amount
+      })
+
+      const amount = sumEpochRewards(epochRewards)
+      if (amount === 0n) return
+
+      rewards.push({
+        id: `regular-${promotion.id.toString()}-${vault.address.toLowerCase()}`,
+        type: 'regular',
+        chainId,
+        promotionId: promotion.id,
+        vault: vault.address,
+        vaultName: vault.name,
+        token: promotion.token,
+        tokenSymbol: tokens[promotion.token.toLowerCase()]?.symbol ?? 'TOKEN',
+        tokenDecimals: tokens[promotion.token.toLowerCase()]?.decimals ?? 18,
+        amount,
+        epochRewards
+      })
+    })
+  }
+
+  return rewards
+}
+
+const readRegularPromotionInfos = async (
+  publicClient: NonNullable<ReturnType<typeof useWalletPublicClient>>,
+  chainId: number
+) => {
+  const twabRewardsAddress = TWAB_REWARDS_ADDRESSES[chainId]
+  if (!twabRewardsAddress) return []
+
+  const promotionIds = await readRegularPromotionIds(publicClient, twabRewardsAddress)
+  if (!promotionIds.length) return []
+
+  const promotions: Array<PromotionInfo & { id: bigint }> = []
+
+  for (let index = 0; index < promotionIds.length; index += MAX_REWARD_MULTICALLS_PER_BATCH) {
+    const promotionBatch = promotionIds.slice(index, index + MAX_REWARD_MULTICALLS_PER_BATCH)
+    const promotionResults = await publicClient.multicall({
+      allowFailure: true,
+      contracts: promotionBatch.map((promotionId) => ({
+        address: twabRewardsAddress,
+        abi: twabRewardsAbi,
+        functionName: 'getPromotion',
+        args: [promotionId]
+      }))
+    })
+
+    promotionBatch.forEach((promotionId, promotionIndex) => {
+      const result = getSuccessfulResult<PromotionInfo | readonly unknown[]>(
+        promotionResults[promotionIndex]
+      )
+
+      if (!result) return
+
+      promotions.push({
+        id: promotionId,
+        creator: getPromotionField<Address>(result, 'creator', 0),
+        startTimestamp: getBigIntPromotionField(result, 'startTimestamp', 1),
+        numberOfEpochs: getNumberPromotionField(result, 'numberOfEpochs', 2),
+        vault: getPromotionField<Address>(result, 'vault', 3),
+        epochDuration: getNumberPromotionField(result, 'epochDuration', 4),
+        token: getPromotionField<Address>(result, 'token', 6)
+      })
+    })
+  }
+
+  return promotions
+}
+
 const readVaultsByCurrentBalance = async (
   publicClient: NonNullable<ReturnType<typeof useWalletPublicClient>>,
   userAddress: Address,
@@ -465,6 +661,53 @@ const readPoolWidePromotionIds = async (
   )
 }
 
+const readRegularPromotionIds = async (
+  publicClient: NonNullable<ReturnType<typeof useWalletPublicClient>>,
+  twabRewardsAddress: Address
+) => {
+  const isValidPromotionId = async (promotionId: bigint) => {
+    try {
+      await publicClient.readContract({
+        address: twabRewardsAddress,
+        abi: twabRewardsAbi,
+        functionName: 'getPromotion',
+        args: [promotionId]
+      })
+      return true
+    } catch (error) {
+      if (isInvalidPromotionError(error)) return false
+      throw error
+    }
+  }
+
+  if (!(await isValidPromotionId(1n))) return []
+
+  let lowerBound = 1n
+  let upperBound = 2n
+
+  while (upperBound <= MAX_REGULAR_PROMOTION_SEARCH_ID && (await isValidPromotionId(upperBound))) {
+    lowerBound = upperBound
+    upperBound *= 2n
+  }
+
+  if (upperBound > MAX_REGULAR_PROMOTION_SEARCH_ID) upperBound = MAX_REGULAR_PROMOTION_SEARCH_ID + 1n
+
+  while (lowerBound + 1n < upperBound) {
+    const midpoint = (lowerBound + upperBound) / 2n
+
+    if (await isValidPromotionId(midpoint)) {
+      lowerBound = midpoint
+    } else {
+      upperBound = midpoint
+    }
+  }
+
+  const latestPromotionId = Number(lowerBound)
+  if (!Number.isSafeInteger(latestPromotionId) || latestPromotionId < 1) return []
+
+  return Array.from({ length: latestPromotionId }, (_, index) => BigInt(index + 1))
+}
+
 const getRewardEpochs = (reward: AccountReward) => Object.keys(reward.epochRewards).map(Number)
 
 const getPromotionEpochs = (info: {
@@ -545,6 +788,31 @@ const decodeClaimedEpochs = (claimFlags: `0x${string}`) => {
 
 const sumEpochRewards = (epochRewards: Record<number, bigint>) =>
   Object.values(epochRewards).reduce((total, amount) => total + amount, 0n)
+
+const isInvalidPromotionError = (error: unknown) => {
+  const message = getErrorMessage(error)
+  return /InvalidPromotion|execution reverted|revert/i.test(message)
+}
+
+const getErrorMessage = (error: unknown): string => {
+  if (!error || typeof error !== 'object') return ''
+
+  const parsedError = error as {
+    shortMessage?: string
+    message?: string
+    details?: string
+    cause?: unknown
+  }
+
+  return [
+    parsedError.shortMessage,
+    parsedError.message,
+    parsedError.details,
+    getErrorMessage(parsedError.cause)
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
 
 const getSuccessfulResult = <T>(result: unknown): T | undefined => {
   if (typeof result !== 'object' || !result || !('status' in result)) return undefined

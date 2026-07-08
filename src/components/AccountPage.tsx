@@ -8,7 +8,8 @@ import { useTokenPricesInUsdc } from '../lib/tokenPrices'
 import {
   getClaimRewardRequest,
   type AccountReward,
-  useAccountRewards
+  useAccountRewards,
+  useVaultTwabRewardTokens
 } from '../lib/useAccountRewards'
 import { getVaultReadId, useVaultListReads } from '../lib/useVaultReads'
 import type { VaultListToken } from '../lib/types'
@@ -34,6 +35,7 @@ export const AccountPage = ({
 }: AccountPageProps) => {
   const vaultListReads = useVaultListReads(vaults)
   const rewardsQuery = useAccountRewards(chainId, vaults)
+  const vaultRewardTokens = useVaultTwabRewardTokens(chainId, vaults)
   const rewards = rewardsQuery.data ?? []
   const rewardsProgress = rewardsQuery.progress
   const depositedVaults = useMemo(() => {
@@ -107,7 +109,7 @@ export const AccountPage = ({
           <div>Prize Vault</div>
           <div className="text-center">Your Deposit</div>
           <div className="text-center">Total Deposits</div>
-          <div className="text-center">Prize Size</div>
+          <div className="text-center">Prize</div>
           <div className="text-right">
             <span className="inline-block w-52 text-center">Manage</span>
           </div>
@@ -135,6 +137,7 @@ export const AccountPage = ({
                 isError={vaultListReads.isError}
                 isSwitchingChain={isSwitchingChain}
                 href={vaultHref(vault.chainId, vault.address)}
+                rewardTokens={vaultRewardTokens.data?.[vault.address.toLowerCase()]}
                 onAction={(mode) => onVaultAction(vault, mode)}
               />
             ))}
@@ -172,7 +175,7 @@ export const AccountPage = ({
           )}
         </div>
 
-        {(isSearchingRewards || hasSearchedVaults) && (
+        {isSearchingRewards && (
           <RewardSearchProgress
             searchedVaults={rewardsProgress.searchedVaults}
             totalVaults={rewardsProgress.totalVaults}
@@ -180,15 +183,11 @@ export const AccountPage = ({
           />
         )}
 
-        {isLoading ? (
+        {isSearchingRewards ? null : isLoading ? (
           <RewardSkeleton />
         ) : rewardsQuery.isError ? (
           <div className="rounded-2xl bg-white/5 px-5 py-8 text-center font-grotesk text-xl font-semibold text-white">
             Rewards are unavailable on {CHAIN_LABELS[chainId] ?? `Chain ${chainId}`}.
-          </div>
-        ) : rewards.length === 0 && isSearchingRewards ? (
-          <div className="rounded-2xl bg-white/5 px-5 py-8 text-center font-grotesk text-xl font-semibold text-white">
-            Searching for bonus rewards.
           </div>
         ) : rewards.length === 0 ? (
           <div className="rounded-2xl bg-white/5 px-5 py-8 text-center font-grotesk text-xl font-semibold text-white">
@@ -363,14 +362,14 @@ const RewardSearchProgress = ({
   const progress = totalVaults > 0 ? Math.round((searchedVaults / totalVaults) * 100) : 0
 
   return (
-    <div className="mb-4 rounded-2xl bg-white/10 px-4 py-3">
+    <div className="mb-4 max-w-xl rounded-2xl bg-white/10 px-4 py-3">
       <div className="flex items-center justify-between gap-4 font-grotesk text-sm font-semibold text-pt-purple-50">
         <span>{isSearching ? 'Searching rewards' : 'Reward search complete'}</span>
         <span>
           {searchedVaults}/{totalVaults} vaults
         </span>
       </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+      <div className="mt-3 h-4 overflow-hidden rounded-full bg-white/10">
         <div
           className="h-full rounded-full bg-pt-teal transition-[width] duration-300"
           style={{ width: `${progress}%` }}
