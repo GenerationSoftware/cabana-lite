@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { publicActions, type Address } from 'viem'
+import { decodeFunctionResult, encodeFunctionData, publicActions, type Address } from 'viem'
 import { useAccount, useConnectorClient } from 'wagmi'
 import { erc20Abi, prizePoolAbi, vaultAbi } from './abis'
 import { PRIZE_POOL_BY_CHAIN, SUPPORTED_CHAINS } from './constants'
@@ -140,6 +140,11 @@ export const useVaultReads = (vault: VaultListToken) => {
             address: prizePool,
             abi: prizePoolAbi,
             functionName: 'numberOfTiers'
+          },
+          {
+            address: prizePool,
+            abi: prizePoolAbi,
+            functionName: 'isShutdown'
           }
         ]
       })
@@ -152,6 +157,7 @@ export const useVaultReads = (vault: VaultListToken) => {
       const prizeTokenSymbol = getSuccessfulResult<string>(readResults[5])
       const prizeTokenDecimals = getSuccessfulResult<number>(readResults[6])
       const numberOfTiers = getSuccessfulResult<number>(readResults[7]) ?? 0
+      const isPrizePoolShutdown = getSuccessfulResult<boolean>(readResults[8]) ?? false
       const tierContracts = Array.from({ length: Number(numberOfTiers) }, (_, tier) => ({
         address: prizePool,
         abi: prizePoolAbi,
@@ -166,6 +172,26 @@ export const useVaultReads = (vault: VaultListToken) => {
             })
           : []
       const tierPrizes = tierResults.map((result) => getSuccessfulResult<bigint>(result) ?? 0n)
+      const shutdownMetadata = isPrizePoolShutdown
+        ? await publicClient.multicall({
+            allowFailure: true,
+            contracts: [
+              {
+                address: prizePool,
+                abi: prizePoolAbi,
+                functionName: 'shutdownAt'
+              },
+              {
+                address: prizePool,
+                abi: prizePoolAbi,
+                functionName: 'drawTimeoutAt'
+              }
+            ]
+          })
+        : []
+      const shutdownBalance = isPrizePoolShutdown
+        ? await readShutdownBalance(publicClient, prizePool, vault.address, userAddress)
+        : undefined
 
       return {
         asset,
@@ -179,7 +205,11 @@ export const useVaultReads = (vault: VaultListToken) => {
         walletAssetBalance,
         allowance,
         tierZeroPrize: tierPrizes[0],
-        tierPrizes
+        tierPrizes,
+        isPrizePoolShutdown,
+        shutdownAt: getSuccessfulResult<bigint>(shutdownMetadata[0]),
+        drawTimeoutAt: getSuccessfulResult<bigint>(shutdownMetadata[1]),
+        shutdownBalance
       }
     }
   })
@@ -224,6 +254,11 @@ export const useVaultListReads = (vaults: VaultListToken[]) => {
           {
             address: prizePool.address,
             abi: prizePoolAbi,
+            functionName: 'isShutdown'
+          },
+          {
+            address: prizePool.address,
+            abi: prizePoolAbi,
             functionName: 'getTierPrizeSize',
             args: [0]
           },
@@ -245,15 +280,46 @@ export const useVaultListReads = (vaults: VaultListToken[]) => {
         contracts
       })
 
+      const isPrizePoolShutdown = prizePool
+        ? (getSuccessfulResult<boolean>(results[vaultCallCount]) ?? false)
+        : false
       const tierZeroPrize = prizePool
-        ? getSuccessfulResult<bigint>(results[vaultCallCount])
+        ? getSuccessfulResult<bigint>(results[vaultCallCount + 1])
         : undefined
       const prizeTokenSymbol = prizePool
-        ? getSuccessfulResult<string>(results[vaultCallCount + 1])
+        ? getSuccessfulResult<string>(results[vaultCallCount + 2])
         : undefined
       const prizeTokenDecimals = prizePool
-        ? getSuccessfulResult<number>(results[vaultCallCount + 2])
+        ? getSuccessfulResult<number>(results[vaultCallCount + 3])
         : undefined
+      const shutdownMetadata =
+        prizePool && isPrizePoolShutdown
+          ? await publicClient.multicall({
+              allowFailure: true,
+              contracts: [
+                {
+                  address: prizePool.address,
+                  abi: prizePoolAbi,
+                  functionName: 'shutdownAt'
+                },
+                {
+                  address: prizePool.address,
+                  abi: prizePoolAbi,
+                  functionName: 'drawTimeoutAt'
+                }
+              ]
+            })
+          : []
+      const shutdownResults =
+        prizePool && isPrizePoolShutdown
+          ? await Promise.all(
+              vaults.map((vault) =>
+                readShutdownBalance(publicClient, prizePool.address, vault.address, userAddress)
+              )
+            )
+          : []
+      const shutdownAt = getSuccessfulResult<bigint>(shutdownMetadata[0])
+      const drawTimeoutAt = getSuccessfulResult<bigint>(shutdownMetadata[1])
       const dataById: Record<string, VaultReadData> = {}
 
       vaults.forEach((vault, index) => {
@@ -269,7 +335,11 @@ export const useVaultListReads = (vaults: VaultListToken[]) => {
           prizeTokenDecimals,
           totalAssets,
           userAssets,
-          tierZeroPrize
+          tierZeroPrize,
+          isPrizePoolShutdown,
+          shutdownAt,
+          drawTimeoutAt,
+          shutdownBalance: shutdownResults[index]
         }
       })
 
@@ -314,6 +384,11 @@ export const usePrizePoolReads = (chainId: number) => {
             address: prizePool.address,
             abi: prizePoolAbi,
             functionName: 'drawPeriodSeconds'
+          },
+          {
+            address: prizePool.address,
+            abi: prizePoolAbi,
+            functionName: 'isShutdown'
           }
         ]
       })
@@ -321,6 +396,7 @@ export const usePrizePoolReads = (chainId: number) => {
       const prizeTokenDecimals = getSuccessfulResult<number>(readResults[1])
       const numberOfTiers = getSuccessfulResult<number>(readResults[2]) ?? 0
       const drawPeriodSeconds = getSuccessfulResult<number>(readResults[3])
+      const isShutdown = getSuccessfulResult<boolean>(readResults[4]) ?? false
       const tierContracts = Array.from({ length: Number(numberOfTiers) }, (_, tier) => [
         {
           address: prizePool.address,
@@ -353,6 +429,23 @@ export const usePrizePoolReads = (chainId: number) => {
         const accrualDays = (Number(duration) * drawPeriod) / 86_400
         return accrualDays > 0 ? 4 ** tier / accrualDays : 0
       })
+      const shutdownMetadata = isShutdown
+        ? await publicClient.multicall({
+            allowFailure: true,
+            contracts: [
+              {
+                address: prizePool.address,
+                abi: prizePoolAbi,
+                functionName: 'shutdownAt'
+              },
+              {
+                address: prizePool.address,
+                abi: prizePoolAbi,
+                functionName: 'drawTimeoutAt'
+              }
+            ]
+          })
+        : []
 
       return {
         prizePool: prizePool.address,
@@ -361,11 +454,16 @@ export const usePrizePoolReads = (chainId: number) => {
         prizeTokenDecimals,
         tierPrizes,
         tierDailyFrequencies,
-        drawPeriodSeconds: drawPeriod
+        drawPeriodSeconds: drawPeriod,
+        isShutdown,
+        shutdownAt: getSuccessfulResult<bigint>(shutdownMetadata[0]),
+        drawTimeoutAt: getSuccessfulResult<bigint>(shutdownMetadata[1])
       }
     }
   })
 }
+
+type WalletPublicClient = NonNullable<ReturnType<typeof useWalletPublicClient>>
 
 type MulticallCall = {
   address: Address
@@ -380,4 +478,32 @@ const getSuccessfulResult = <T>(result: unknown): T | undefined => {
   if (result.status !== 'success' || !('result' in result)) return undefined
 
   return result.result as T
+}
+
+const readShutdownBalance = async (
+  publicClient: WalletPublicClient,
+  prizePool: Address,
+  vault: Address,
+  userAddress: Address
+): Promise<bigint | undefined> => {
+  try {
+    const result = await publicClient.call({
+      to: prizePool,
+      data: encodeFunctionData({
+      abi: prizePoolAbi,
+      functionName: 'shutdownBalanceOf',
+      args: [vault, userAddress]
+      })
+    })
+
+    if (!result.data) return undefined
+
+    return decodeFunctionResult({
+      abi: prizePoolAbi,
+      functionName: 'shutdownBalanceOf',
+      data: result.data
+    }) as bigint
+  } catch {
+    return undefined
+  }
 }

@@ -5,6 +5,7 @@ import { useTokenPricesInUsdc } from '../lib/tokenPrices'
 import { usePrizePoolReads, useVaultReads } from '../lib/useVaultReads'
 import type { VaultListToken } from '../lib/types'
 import { CopyableAddress } from './CopyableAddress'
+import { ClaimShutdownBalanceButton } from './ClaimShutdownBalanceButton'
 import { PrizeList } from './PrizeList'
 
 interface VaultPageProps {
@@ -15,7 +16,7 @@ interface VaultPageProps {
 
 export const VaultPage = ({ vault, onBack, onAction }: VaultPageProps) => {
   const { address, chain } = useAccount()
-  const { data, isLoading, isError } = useVaultReads(vault)
+  const { data, isLoading, isError, refetch } = useVaultReads(vault)
   const prizePoolReads = usePrizePoolReads(vault.chainId)
   const prizeData = prizePoolReads.data
   const isCurrentChain = chain?.id === vault.chainId
@@ -32,6 +33,9 @@ export const VaultPage = ({ vault, onBack, onAction }: VaultPageProps) => {
   const tierZeroPrize = prizeData?.tierPrizes[0] ?? data?.tierZeroPrize
   const prizeTokenDecimals = prizeData?.prizeTokenDecimals ?? data?.prizeTokenDecimals
   const prizeTokenSymbol = prizeData?.prizeTokenSymbol ?? data?.prizeTokenSymbol
+  const isShutdown = data?.isPrizePoolShutdown ?? prizeData?.isShutdown ?? false
+  const shutdownBalance = data?.shutdownBalance ?? 0n
+  const hasShutdownClaim = shutdownBalance > 0n
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6">
@@ -65,14 +69,24 @@ export const VaultPage = ({ vault, onBack, onAction }: VaultPageProps) => {
             {vault.extensions?.yieldSource?.name && <span>{vault.extensions.yieldSource.name}</span>}
           </div>
         </div>
+        {isShutdown && (
+          <div className="w-full rounded-2xl border border-pt-warning/30 bg-pt-warning/20 px-5 py-4 text-left text-pt-warning-light">
+            <div className="font-grotesk text-xl font-semibold text-white">Prize pool shutdown</div>
+            <div className="mt-1 text-sm font-medium">
+              This vault no longer offers prizes. You can still withdraw deposits and claim any prize pool share.
+            </div>
+          </div>
+        )}
         <div className="flex w-full max-w-md gap-3">
-          <button
-            type="button"
-            onClick={() => onAction('deposit')}
-            className="flex-1 rounded-lg bg-pt-teal px-5 py-4 font-grotesk text-2xl font-bold text-pt-purple-900 transition hover:bg-pt-teal-light"
-          >
-            Deposit
-          </button>
+          {!isShutdown && (
+            <button
+              type="button"
+              onClick={() => onAction('deposit')}
+              className="flex-1 rounded-lg bg-pt-teal px-5 py-4 font-grotesk text-2xl font-bold text-pt-purple-900 transition hover:bg-pt-teal-light"
+            >
+              Deposit
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onAction('withdraw')}
@@ -80,6 +94,14 @@ export const VaultPage = ({ vault, onBack, onAction }: VaultPageProps) => {
           >
             Withdraw
           </button>
+          {isShutdown && hasShutdownClaim && (
+            <ClaimShutdownBalanceButton
+              vault={vault}
+              data={data}
+              onSettled={() => void refetch()}
+              className="flex-1"
+            />
+          )}
         </div>
       </section>
 
@@ -113,9 +135,9 @@ export const VaultPage = ({ vault, onBack, onAction }: VaultPageProps) => {
           }
         />
         <StatCard
-          label="Grand prize"
+          label={isShutdown ? 'Prize pool share' : 'Grand prize'}
           subValue={
-            metricFallback || isLoading
+            metricFallback || isLoading || isShutdown
               ? undefined
               : formatUsdcValue(tierZeroPrize, prizeTokenDecimals, prizeTokenPrice, {
                   compact: true
@@ -125,10 +147,17 @@ export const VaultPage = ({ vault, onBack, onAction }: VaultPageProps) => {
             metricFallback ??
             (isLoading
               ? '...'
-              : formatTokenAmount(tierZeroPrize, prizeTokenDecimals, {
-                  compact: true,
-                  symbol: prizeTokenSymbol
-                }))
+              : isShutdown
+                ? hasShutdownClaim
+                  ? formatTokenAmount(shutdownBalance, prizeTokenDecimals, {
+                      compact: true,
+                      symbol: prizeTokenSymbol
+                    })
+                  : 'No claimable share'
+                : formatTokenAmount(tierZeroPrize, prizeTokenDecimals, {
+                    compact: true,
+                    symbol: prizeTokenSymbol
+                  }))
           }
         />
       </section>
@@ -146,16 +175,18 @@ export const VaultPage = ({ vault, onBack, onAction }: VaultPageProps) => {
         <CopyableAddress label="Prize token address" address={data?.prizeToken} />
       </section>
 
-      <section className="flex flex-col items-center">
-        <PrizeList
-          chainId={vault.chainId}
-          data={prizeData}
-          prizeTokenPrice={prizeTokenPrice}
-          isLoading={isCurrentChain && (prizePoolReads.isLoading || prizePoolReads.isFetching)}
-          isError={prizePoolReads.isError}
-          isSwitchingChain={!isCurrentChain}
-        />
-      </section>
+      {!isShutdown && (
+        <section className="flex flex-col items-center">
+          <PrizeList
+            chainId={vault.chainId}
+            data={prizeData}
+            prizeTokenPrice={prizeTokenPrice}
+            isLoading={isCurrentChain && (prizePoolReads.isLoading || prizePoolReads.isFetching)}
+            isError={prizePoolReads.isError}
+            isSwitchingChain={!isCurrentChain}
+          />
+        </section>
+      )}
     </main>
   )
 }

@@ -38,18 +38,18 @@ export const AccountPage = ({
   const vaultRewardTokens = useVaultTwabRewardTokens(chainId, vaults)
   const rewards = rewardsQuery.data ?? []
   const rewardsProgress = rewardsQuery.progress
-  const depositedVaults = useMemo(() => {
+  const accountVaults = useMemo(() => {
     if (!vaultListReads.data) return []
 
     return vaults.filter((vault) => {
       const data = vaultListReads.data?.[getVaultReadId(vault)]
-      return (data?.userAssets ?? 0n) > 0n
+      return (data?.userAssets ?? 0n) > 0n || (data?.shutdownBalance ?? 0n) > 0n
     })
   }, [vaultListReads.data, vaults])
   const tokenPriceInputs = useMemo(() => {
     if (!vaultListReads.data) return []
 
-    return depositedVaults.flatMap((vault) => {
+    return accountVaults.flatMap((vault) => {
       const data = vaultListReads.data?.[getVaultReadId(vault)]
       return [
         {
@@ -62,9 +62,9 @@ export const AccountPage = ({
         }
       ]
     })
-  }, [depositedVaults, vaultListReads.data])
+  }, [accountVaults, vaultListReads.data])
   const tokenPrices = useTokenPricesInUsdc(chainId, tokenPriceInputs, {
-    enabled: !!vaultListReads.data && depositedVaults.length > 0 && !vaultListReads.isLoading
+    enabled: !!vaultListReads.data && accountVaults.length > 0 && !vaultListReads.isLoading
   })
   const groupedRewards = useMemo(() => groupRewardsByToken(rewards), [rewards])
   const hasSearchedVaults = rewardsProgress.searchedVaults > 0
@@ -121,13 +121,13 @@ export const AccountPage = ({
           <div className="rounded-2xl bg-white/5 px-5 py-8 text-center font-grotesk text-xl font-semibold text-white">
             Vault deposits are unavailable on {CHAIN_LABELS[chainId] ?? `Chain ${chainId}`}.
           </div>
-        ) : depositedVaults.length === 0 ? (
+        ) : accountVaults.length === 0 ? (
           <div className="rounded-2xl bg-white/5 px-5 py-8 text-center font-grotesk text-xl font-semibold text-white">
-            No active vault deposits on {CHAIN_LABELS[chainId] ?? `Chain ${chainId}`}.
+            No active vault deposits or prize pool claims on {CHAIN_LABELS[chainId] ?? `Chain ${chainId}`}.
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {depositedVaults.map((vault) => (
+            {accountVaults.map((vault) => (
               <VaultRow
                 key={`${vault.chainId}-${vault.address}`}
                 vault={vault}
@@ -139,6 +139,7 @@ export const AccountPage = ({
                 href={vaultHref(vault.chainId, vault.address)}
                 rewardTokens={vaultRewardTokens.data?.[vault.address.toLowerCase()]}
                 onAction={(mode) => onVaultAction(vault, mode)}
+                onShutdownClaimSettled={() => void vaultListReads.refetch()}
               />
             ))}
           </div>

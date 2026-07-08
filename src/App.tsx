@@ -177,6 +177,14 @@ export const App = () => {
   const tokenPrices = useTokenPricesInUsdc(chainFilter, tokenPriceInputs, {
     enabled: !!vaultListReads.data && !vaultListReads.isLoading
   })
+  const isVaultListPrizePoolShutdown = useMemo(() => {
+    if (!vaultListReads.data) return false
+
+    return vaultListReadVaults.some((vault) => {
+      const data = vaultListReads.data?.[getVaultReadId(vault)]
+      return data?.isPrizePoolShutdown
+    })
+  }, [vaultListReads.data, vaultListReadVaults])
   const isSwitchingSelectedChain =
     !!address &&
     (route.type === 'vaults' || route.type === 'prizes' || route.type === 'account') &&
@@ -264,6 +272,16 @@ export const App = () => {
                   />
                 </div>
               </div>
+              {isVaultListPrizePoolShutdown && (
+                <div className="flex max-w-3xl items-start gap-3 rounded-2xl border border-pt-warning/40 bg-pt-warning/20 px-5 py-4 text-left text-sm font-medium text-pt-warning-light">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-pt-warning-light/70 font-grotesk text-base font-bold leading-none">
+                    !
+                  </span>
+                  <span>
+                    The prize pool on this chain has been shutdown. The remaining prizes will be distributed pro-rata to depositors.
+                  </span>
+                </div>
+              )}
             </section>
 
             <section className="rounded-t-2xl rounded-b-[2.5rem] bg-[#2D0C66] px-5 pb-5 pt-7">
@@ -290,6 +308,7 @@ export const App = () => {
                     href={vaultHref(vault.chainId, vault.address)}
                     rewardTokens={vaultRewardTokens.data?.[vault.address.toLowerCase()]}
                     onAction={(mode) => setModalState({ vault, mode })}
+                    onShutdownClaimSettled={() => void vaultListReads.refetch()}
                   />
                 ))}
               </div>
@@ -415,24 +434,38 @@ const PrizesPage = ({
     prizeData?.prizeTokenSymbol === 'WETH' ? 'ETH' : (prizeData?.prizeTokenSymbol ?? 'ETH')
   const prizeAmountLabel = `${formatAnimatedPrize(animatedTierOnePrize)} ${prizeTokenSymbol}`
   const prizeAmountWidthLabel = `${formatAnimatedPrize(tierOnePrize)} ${prizeTokenSymbol}`
+  const isShutdown = prizeData?.isShutdown ?? false
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-9 px-4 pb-14 pt-10 sm:px-6 lg:pt-12">
       <section className="flex flex-col items-center gap-7 text-center">
         <h1 className="max-w-4xl font-grotesk text-[2rem] font-bold leading-none text-white sm:text-4xl lg:text-5xl">
-          Keep your deposit. Win up to{' '}
-          <span className="inline-flex whitespace-nowrap">
-            <span
-              className="inline-flex text-pt-teal tabular-nums"
-              style={{ minWidth: `${prizeAmountWidthLabel.length}ch` }}
-            >
-              {prizeAmountLabel}
-            </span>
-            <span className="ml-2" aria-hidden="true">
-              🎉
-            </span>
-          </span>
+          {isShutdown ? (
+            <>
+              Prize pool <span className="text-pt-warning-light">shutdown</span>
+            </>
+          ) : (
+            <>
+              Keep your deposit. Win up to{' '}
+              <span className="inline-flex whitespace-nowrap">
+                <span
+                  className="inline-flex text-pt-teal tabular-nums"
+                  style={{ minWidth: `${prizeAmountWidthLabel.length}ch` }}
+                >
+                  {prizeAmountLabel}
+                </span>
+                <span className="ml-2" aria-hidden="true">
+                  🎉
+                </span>
+              </span>
+            </>
+          )}
         </h1>
+        {isShutdown && (
+          <div className="max-w-2xl rounded-2xl border border-pt-warning/30 bg-pt-warning/20 px-5 py-4 text-sm font-medium text-pt-warning-light">
+            Vaults on this chain no longer offer prizes. Visit a vault or your account to claim any available prize pool share.
+          </div>
+        )}
         <div className="rounded-[1.75rem] bg-[#2D0C66] px-5 py-4 shadow-[0_20px_80px_rgba(20,4,48,0.18)]">
           <div className="flex flex-wrap items-center justify-center gap-3">
             <ChainSelectButton
@@ -444,16 +477,18 @@ const PrizesPage = ({
         </div>
       </section>
 
-      <section className="flex flex-col items-center">
-        <PrizeList
-          chainId={chainId}
-          data={prizeData}
-          prizeTokenPrice={prizeTokenPrice}
-          isLoading={isLoading}
-          isError={prizePoolReads.isError}
-          isSwitchingChain={isSwitchingChain}
-        />
-      </section>
+      {!isShutdown && (
+        <section className="flex flex-col items-center">
+          <PrizeList
+            chainId={chainId}
+            data={prizeData}
+            prizeTokenPrice={prizeTokenPrice}
+            isLoading={isLoading}
+            isError={prizePoolReads.isError}
+            isSwitchingChain={isSwitchingChain}
+          />
+        </section>
+      )}
     </main>
   )
 }

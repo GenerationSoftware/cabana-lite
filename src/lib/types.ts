@@ -54,6 +54,10 @@ export interface VaultReadData {
   allowance?: bigint
   tierZeroPrize?: bigint
   tierPrizes?: bigint[]
+  isPrizePoolShutdown?: boolean
+  shutdownAt?: bigint
+  drawTimeoutAt?: bigint
+  shutdownBalance?: bigint
 }
 
 export interface PrizePoolReadData {
@@ -64,4 +68,7 @@ export interface PrizePoolReadData {
   tierPrizes: bigint[]
   tierDailyFrequencies: number[]
   drawPeriodSeconds?: number
+  isShutdown?: boolean
+  shutdownAt?: bigint
+  drawTimeoutAt?: bigint
 }

@@ -23,10 +23,15 @@ export const erc20Abi = parseAbi([
 
 export const prizePoolAbi = parseAbi([
   'function drawPeriodSeconds() view returns (uint48)',
+  'function drawTimeoutAt() view returns (uint256)',
   'function getTierAccrualDurationInDraws(uint8 tier) view returns (uint24)',
   'function getTierPrizeSize(uint8 tier) view returns (uint104)',
+  'function isShutdown() view returns (bool)',
   'function numberOfTiers() view returns (uint8)',
-  'function prizeToken() view returns (address)'
+  'function prizeToken() view returns (address)',
+  'function shutdownAt() view returns (uint256)',
+  'function shutdownBalanceOf(address vault, address account) returns (uint256)',
+  'function withdrawShutdownBalance(address vault, address recipient) returns (uint256)'
 ])
 
 export const twabRewardsAbi = parseAbi([

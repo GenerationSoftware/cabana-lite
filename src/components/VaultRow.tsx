@@ -4,6 +4,7 @@ import { POOL_STAKING_VAULTS } from '../lib/constants'
 import { formatTokenAmount, formatUsdcValue } from '../lib/format'
 import type { VaultTwabRewardToken } from '../lib/useAccountRewards'
 import type { VaultListToken, VaultReadData } from '../lib/types'
+import { ClaimShutdownBalanceButton } from './ClaimShutdownBalanceButton'
 
 interface VaultRowProps {
   vault: VaultListToken
@@ -15,6 +16,7 @@ interface VaultRowProps {
   href: string
   rewardTokens?: VaultTwabRewardToken[]
   onAction: (mode: 'deposit' | 'withdraw') => void
+  onShutdownClaimSettled?: () => void
 }
 
 export const VaultRow = ({
@@ -26,7 +28,8 @@ export const VaultRow = ({
   isSwitchingChain,
   href,
   rewardTokens,
-  onAction
+  onAction,
+  onShutdownClaimSettled
 }: VaultRowProps) => {
   const { address, chain } = useAccount()
   const isCurrentChain = chain?.id === vault.chainId
@@ -38,6 +41,9 @@ export const VaultRow = ({
   const assetPrice = assetAddress ? tokenPrices?.[assetAddress.toLowerCase()] : undefined
   const prizeTokenPrice = data?.prizeToken ? tokenPrices?.[data.prizeToken.toLowerCase()] : undefined
   const rewardLabel = getRewardTokenLabel(rewardTokens)
+  const isShutdown = data?.isPrizePoolShutdown ?? false
+  const shutdownBalance = data?.shutdownBalance ?? 0n
+  const hasShutdownClaim = shutdownBalance > 0n
 
   return (
     <article
@@ -98,13 +104,15 @@ export const VaultRow = ({
         }
       />
       <Metric
-        label="Prize"
+        label={isShutdown ? 'Shutdown' : 'Prize'}
         isLoading={isMetricLoading && !metricFallback}
         subValue={
-          !metricFallback && !isMetricLoading
+          !isShutdown && !metricFallback && !isMetricLoading
             ? formatUsdcValue(data?.tierZeroPrize, data?.prizeTokenDecimals, prizeTokenPrice, {
                 compact: true
               })
+            : isShutdown && !metricFallback && !isMetricLoading && hasShutdownClaim
+              ? 'Claimable'
             : undefined
         }
         value={
@@ -112,12 +120,26 @@ export const VaultRow = ({
             ? metricFallback
             : isMetricLoading
               ? undefined
-              : formatTokenAmount(data?.tierZeroPrize, data?.prizeTokenDecimals, {
-                  compact: true,
-                  symbol: data?.prizeTokenSymbol
-                })
+              : isShutdown
+                ? hasShutdownClaim
+                  ? formatTokenAmount(shutdownBalance, data?.prizeTokenDecimals, {
+                      compact: true,
+                      symbol: data?.prizeTokenSymbol
+                    })
+                  : 'No prizes'
+                : formatTokenAmount(data?.tierZeroPrize, data?.prizeTokenDecimals, {
+                    compact: true,
+                    symbol: data?.prizeTokenSymbol
+                  })
         }
-        extraValue={!metricFallback && !isMetricLoading ? rewardLabel : undefined}
+        extraValue={
+          !metricFallback && !isMetricLoading
+            ? isShutdown
+              ? 'Shutdown'
+              : rewardLabel
+            : undefined
+        }
+        extraTone={isShutdown ? 'warning' : 'teal'}
       />
       <div className="min-w-0">
         {isError && isCurrentChain && (
@@ -126,6 +148,14 @@ export const VaultRow = ({
           </div>
         )}
         <div className="flex items-center justify-end gap-2 lg:ml-auto">
+          {isShutdown && hasShutdownClaim && (
+            <ClaimShutdownBalanceButton
+              vault={vault}
+              data={data}
+              onSettled={onShutdownClaimSettled}
+              className="lg:w-32"
+            />
+          )}
           {hasUserAssets && (
             <button
               type="button"
@@ -135,13 +165,15 @@ export const VaultRow = ({
               Withdraw
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => onAction('deposit')}
-            className="h-[3.25rem] rounded-lg bg-pt-teal px-7 font-grotesk text-base font-semibold text-pt-purple-900 transition hover:bg-pt-teal-light"
-          >
-            Deposit
-          </button>
+          {!isShutdown && (
+            <button
+              type="button"
+              onClick={() => onAction('deposit')}
+              className="h-[3.25rem] rounded-lg bg-pt-teal px-7 font-grotesk text-base font-semibold text-pt-purple-900 transition hover:bg-pt-teal-light"
+            >
+              Deposit
+            </button>
+          )}
         </div>
       </div>
     </article>
@@ -153,12 +185,14 @@ const Metric = ({
   value,
   subValue,
   extraValue,
+  extraTone = 'teal',
   isLoading
 }: {
   label: string
   value?: string
   subValue?: string
   extraValue?: string
+  extraTone?: 'teal' | 'warning'
   isLoading?: boolean
 }) => (
   <div className="flex items-center justify-between gap-4 rounded-lg bg-pt-purple-900/30 px-3 py-3 text-right lg:block lg:bg-transparent lg:px-0 lg:py-0 lg:text-center">
@@ -171,7 +205,13 @@ const Metric = ({
           <span>{value}</span>
           {subValue && <span className="text-xs font-medium text-pt-purple-200">{subValue}</span>}
           {extraValue && (
-            <span className="rounded-full bg-pt-teal/20 px-2.5 py-1 text-xs font-bold uppercase leading-none text-pt-teal">
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase leading-none ${
+                extraTone === 'warning'
+                  ? 'bg-pt-warning/30 text-pt-warning-light'
+                  : 'bg-pt-teal/20 text-pt-teal'
+              }`}
+            >
               {extraValue}
             </span>
           )}
