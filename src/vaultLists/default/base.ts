@@ -27,7 +27,7 @@ export const baseVaults: VaultList['tokens'] = [
     decimals: 6,
     symbol: 'przUSDC',
     logoURI: `${DOMAINS.app}/icons/przUSDC.svg`,
-    tags: ['moonwell', 'deprecated'],
+    tags: ['moonwell', 'disabled'],
     extensions: {
       underlyingAsset: {
         address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',

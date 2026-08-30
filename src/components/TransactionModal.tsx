@@ -40,7 +40,8 @@ export const TransactionModal = (props: TransactionModalProps) => {
   const isWrongChain = connectedChainId !== vault.chainId
   const isShutdown = data?.isPrizePoolShutdown ?? false
   const isDeprecated = vault.tags?.includes('deprecated') ?? false
-  const isDepositDisabled = isShutdown || isDeprecated
+  const isDisabled = vault.tags?.includes('disabled') ?? false
+  const isDepositDisabled = isShutdown || isDeprecated || isDisabled
   const activeMode = isDepositDisabled && mode === 'deposit' ? 'withdraw' : mode
   const modes: Array<'deposit' | 'withdraw'> = isDepositDisabled ? ['withdraw'] : ['deposit', 'withdraw']
   const needsApproval = activeMode === 'deposit' && parsedAmount > 0n && (data?.allowance ?? 0n) < parsedAmount

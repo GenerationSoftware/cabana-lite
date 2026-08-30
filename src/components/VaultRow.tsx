@@ -42,10 +42,10 @@ export const VaultRow = ({
   const prizeTokenPrice = data?.prizeToken ? tokenPrices?.[data.prizeToken.toLowerCase()] : undefined
   const rewardLabel = getRewardTokenLabel(rewardTokens)
   const isShutdown = data?.isPrizePoolShutdown ?? false
-  const isDeprecated = vault.tags?.includes('deprecated') ?? false
+  const isDisabled = vault.tags?.includes('disabled') ?? false
   const shutdownBalance = data?.shutdownBalance ?? 0n
   const hasShutdownClaim = shutdownBalance > 0n
-  const canDeposit = !!data && isCurrentChain && !isSwitchingChain && !isShutdown && !isDeprecated
+  const canDeposit = !!data && isCurrentChain && !isSwitchingChain && !isShutdown && !isDisabled
 
   return (
     <article
@@ -149,7 +149,7 @@ export const VaultRow = ({
             Wallet read failed for this vault.
           </div>
         )}
-        <div className="flex items-center justify-end gap-2 lg:ml-auto">
+        <div className="flex flex-wrap items-center justify-end gap-2 lg:ml-auto">
           {isShutdown && hasShutdownClaim && (
             <ClaimShutdownBalanceButton
               vault={vault}
@@ -175,6 +175,20 @@ export const VaultRow = ({
             >
               Deposit
             </button>
+          )}
+          {isDisabled && (
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-pt-warning/30 bg-pt-warning/10 px-3 py-1 font-grotesk text-xs font-bold uppercase tracking-wide text-pt-warning-light">
+                Disabled
+              </span>
+              <button
+                type="button"
+                disabled
+                className="h-[3.25rem] cursor-not-allowed rounded-lg bg-pt-purple-200/15 px-7 font-grotesk text-base font-semibold text-pt-purple-200/60"
+              >
+                Deposit
+              </button>
+            </div>
           )}
         </div>
       </div>
