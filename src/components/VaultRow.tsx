@@ -42,9 +42,10 @@ export const VaultRow = ({
   const prizeTokenPrice = data?.prizeToken ? tokenPrices?.[data.prizeToken.toLowerCase()] : undefined
   const rewardLabel = getRewardTokenLabel(rewardTokens)
   const isShutdown = data?.isPrizePoolShutdown ?? false
+  const isDeprecated = vault.tags?.includes('deprecated') ?? false
   const shutdownBalance = data?.shutdownBalance ?? 0n
   const hasShutdownClaim = shutdownBalance > 0n
-  const canDeposit = !!data && isCurrentChain && !isSwitchingChain && !isShutdown
+  const canDeposit = !!data && isCurrentChain && !isSwitchingChain && !isShutdown && !isDeprecated
 
   return (
     <article

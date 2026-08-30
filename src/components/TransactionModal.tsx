@@ -39,10 +39,12 @@ export const TransactionModal = (props: TransactionModalProps) => {
   const symbol = vault.extensions?.underlyingAsset?.symbol ?? vault.symbol
   const isWrongChain = connectedChainId !== vault.chainId
   const isShutdown = data?.isPrizePoolShutdown ?? false
-  const activeMode = isShutdown && mode === 'deposit' ? 'withdraw' : mode
-  const modes: Array<'deposit' | 'withdraw'> = isShutdown ? ['withdraw'] : ['deposit', 'withdraw']
+  const isDeprecated = vault.tags?.includes('deprecated') ?? false
+  const isDepositDisabled = isShutdown || isDeprecated
+  const activeMode = isDepositDisabled && mode === 'deposit' ? 'withdraw' : mode
+  const modes: Array<'deposit' | 'withdraw'> = isDepositDisabled ? ['withdraw'] : ['deposit', 'withdraw']
   const needsApproval = activeMode === 'deposit' && parsedAmount > 0n && (data?.allowance ?? 0n) < parsedAmount
-  const disabled = !data || parsedAmount <= 0n || isPending || isConfirming || (isShutdown && activeMode === 'deposit')
+  const disabled = !data || parsedAmount <= 0n || isPending || isConfirming || (isDepositDisabled && activeMode === 'deposit')
 
   useEffect(() => {
     if (isSuccess) {
@@ -51,14 +53,14 @@ export const TransactionModal = (props: TransactionModalProps) => {
   }, [isSuccess, onSettled])
 
   useEffect(() => {
-    if (isShutdown && mode === 'deposit') {
+    if (isDepositDisabled && mode === 'deposit') {
       onModeChange('withdraw')
     }
-  }, [isShutdown, mode, onModeChange])
+  }, [isDepositDisabled, mode, onModeChange])
 
   const submit = () => {
     if (!data?.asset || parsedAmount <= 0n) return
-    if (isShutdown && activeMode === 'deposit') return
+    if (isDepositDisabled && activeMode === 'deposit') return
 
     if (needsApproval) {
       writeContract({
@@ -102,7 +104,7 @@ export const TransactionModal = (props: TransactionModalProps) => {
           </button>
         </div>
 
-        <div className={`mb-5 grid rounded-lg bg-pt-purple-900/60 p-1 ${isShutdown ? 'grid-cols-1' : 'grid-cols-2'}`}>
+        <div className={`mb-5 grid rounded-lg bg-pt-purple-900/60 p-1 ${isDepositDisabled ? 'grid-cols-1' : 'grid-cols-2'}`}>
           {modes.map((tab) => (
             <button
               key={tab}

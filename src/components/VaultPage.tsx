@@ -34,9 +34,10 @@ export const VaultPage = ({ vault, onBack, onAction }: VaultPageProps) => {
   const prizeTokenDecimals = prizeData?.prizeTokenDecimals ?? data?.prizeTokenDecimals
   const prizeTokenSymbol = prizeData?.prizeTokenSymbol ?? data?.prizeTokenSymbol
   const isShutdown = data?.isPrizePoolShutdown ?? prizeData?.isShutdown ?? false
+  const isDeprecated = vault.tags?.includes('deprecated') ?? false
   const shutdownBalance = data?.shutdownBalance ?? 0n
   const hasShutdownClaim = shutdownBalance > 0n
-  const canDeposit = !!data && isCurrentChain && !isLoading && !isShutdown
+  const canDeposit = !!data && isCurrentChain && !isLoading && !isShutdown && !isDeprecated
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6">
