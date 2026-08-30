@@ -153,9 +153,13 @@ export const App = () => {
     )
   }, [])
 
-  const vaults = useMemo(() => {
+  const chainVaults = useMemo(() => {
     return defaultVaultList.tokens.filter((vault) => vault.chainId === chainFilter)
   }, [chainFilter])
+  const vaults = useMemo(
+    () => chainVaults.filter((vault) => !vault.tags?.includes('deprecated')),
+    [chainVaults]
+  )
   const vaultListReadVaults = route.type === 'vaults' ? vaults : []
   const vaultListReads = useVaultListReads(vaultListReadVaults)
   const vaultRewardTokens = useVaultTwabRewardTokens(chainFilter, vaults)
@@ -251,7 +255,7 @@ export const App = () => {
           <AccountPage
             chainId={chainFilter}
             chainLabel={selectedChainLabel}
-            vaults={vaults}
+            vaults={chainVaults}
             isSwitchingChain={isSwitchingSelectedChain}
             onOpenChainSelect={() => setIsChainModalOpen(true)}
             onVaultAction={(vault, mode) => setModalState({ vault, mode })}

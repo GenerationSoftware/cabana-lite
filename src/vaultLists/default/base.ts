@@ -27,7 +27,7 @@ export const baseVaults: VaultList['tokens'] = [
     decimals: 6,
     symbol: 'przUSDC',
     logoURI: `${DOMAINS.app}/icons/przUSDC.svg`,
-    tags: ['moonwell'],
+    tags: ['moonwell', 'deprecated'],
     extensions: {
       underlyingAsset: {
         address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
@@ -47,7 +47,7 @@ export const baseVaults: VaultList['tokens'] = [
     decimals: 18,
     symbol: 'przAERO',
     logoURI: `${DOMAINS.app}/icons/przAERO.svg`,
-    tags: ['moonwell'],
+    tags: ['moonwell', 'deprecated'],
     extensions: {
       underlyingAsset: {
         address: '0x940181a94A35A4569E4529A3CDfB74e38FD98631',
@@ -317,7 +317,7 @@ export const baseVaults: VaultList['tokens'] = [
     decimals: 6,
     symbol: 'kpzUSDC',
     logoURI: `${DOMAINS.app}/icons/przUSDC.svg`,
-    tags: ['moonwell'],
+    tags: ['moonwell', 'deprecated'],
     extensions: {
       underlyingAsset: {
         address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',

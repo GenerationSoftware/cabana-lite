@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
-import { type Address } from 'viem'
+import { formatUnits, type Address } from 'viem'
 import { erc20Abi, vaultAbi } from '../lib/abis'
 import { CHAIN_LABELS } from '../lib/constants'
 import { formatTokenAmount, parseTokenAmount } from '../lib/format'
@@ -142,6 +142,16 @@ export const TransactionModal = (props: TransactionModalProps) => {
                   placeholder="0.00"
                   className="min-w-0 flex-1 bg-transparent text-2xl font-semibold text-white outline-none placeholder:text-pt-purple-300"
                 />
+                {activeMode === 'withdraw' && (
+                  <button
+                    type="button"
+                    disabled={data?.userAssets === undefined}
+                    onClick={() => setAmount(formatUnits(data?.userAssets ?? 0n, vault.decimals))}
+                    className="shrink-0 rounded-md bg-pt-purple-500/40 px-2 py-1 text-xs font-bold uppercase tracking-wide text-pt-teal transition hover:bg-pt-purple-500/70 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Max
+                  </button>
+                )}
                 <span className="shrink-0 font-semibold text-pt-purple-100">{symbol}</span>
               </div>
               <div className="mt-3 flex justify-between text-sm text-pt-purple-200">
