@@ -19,9 +19,11 @@ import {
 import { connectorsForWallets, darkTheme, type Theme, type WalletList } from '@rainbow-me/rainbowkit'
 import { createConfig, custom, type Transport } from 'wagmi'
 import { SUPPORTED_CHAINS } from './constants'
+import { oathWallet } from './oathWallet'
 
 const projectId = '3eb812d6ed9689e2ced204df2b9e6c76'
 const walletMap = {
+  oath: oathWallet,
   metamask: metaMaskWallet,
   walletconnect: walletConnectWallet,
   rainbow: rainbowWallet,
@@ -54,7 +56,7 @@ const walletTransport = (): Transport =>
     }
   })
 
-const defaultWallets = ['injected', 'walletconnect', 'rainbow', 'metamask', 'coinbase'] as const
+const defaultWallets = ['injected', 'oath', 'walletconnect', 'rainbow', 'metamask', 'coinbase'] as const
 const otherWallets = [
   'argent',
   'brave',
@@ -69,16 +71,15 @@ const otherWallets = [
   'zerion'
 ] as const
 
-const getWalletGroups = (): WalletList => {
-  const highlightedWallet =
-    typeof window === 'undefined'
-      ? undefined
-      : new URLSearchParams(window.location.search).get('wallet') ?? undefined
+export const getWalletGroups = (
+  search = typeof window === 'undefined' ? '' : window.location.search
+): WalletList => {
+  const highlightedWallet = new URLSearchParams(search).get('wallet') ?? undefined
 
   if (
     highlightedWallet &&
     highlightedWallet !== 'injected' &&
-    highlightedWallet in walletMap
+    Object.prototype.hasOwnProperty.call(walletMap, highlightedWallet)
   ) {
     const wallet = highlightedWallet as keyof typeof walletMap
     return [

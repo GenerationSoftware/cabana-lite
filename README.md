@@ -73,3 +73,17 @@ CI=true pnpm --config.confirm-modules-purge=false build
 ```
 
 The build may show Rollup warnings about third-party pure annotations and large wallet-related chunks. Those warnings are expected with the current RainbowKit/wagmi bundle.
+
+### Oath Wallet connection
+
+Oath Wallet appears directly in the default RainbowKit wallet group. Desktop users
+can scan its WalletConnect QR in the Oath iOS app; iOS users can open Oath from the
+connection prompt. The existing `?wallet=oath` link highlights it in the
+Recommended group. Oath is not offered as an Android app or browser extension.
+
+Run `pnpm test` for the wallet registration, URI and visibility checks, then
+`CI=true pnpm --config.confirm-modules-purge=false build`. In the preview, check
+that Oath uses the native wallet row, opens its QR, can be closed and reopened,
+and that the separate WalletConnect option still opens afterward. Check the list
+at a narrow viewport too. These checks do not establish phone pairing or
+transaction execution; those need a separate supported-network device test.
