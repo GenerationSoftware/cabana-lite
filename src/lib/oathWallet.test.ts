@@ -61,6 +61,13 @@ describe('Oath Wallet connection', () => {
     expect(names('?wallet=injected')).toEqual(names())
   })
 
+  it.each(['__proto__', 'constructor', 'toString'])(
+    'ignores inherited object properties in wallet highlight links: %s',
+    wallet => {
+      expect(names(`?wallet=${wallet}`)).toEqual(names())
+    }
+  )
+
   it('registers a distinct Oath connector in the actual Wagmi config', () => {
     const oath = wagmiConfig.connectors.find(connector => connector.id === OATH_WALLET_ID)
     expect(oath?.name).toBe('Oath Wallet')

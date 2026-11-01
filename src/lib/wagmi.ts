@@ -79,7 +79,7 @@ export const getWalletGroups = (
   if (
     highlightedWallet &&
     highlightedWallet !== 'injected' &&
-    highlightedWallet in walletMap
+    Object.prototype.hasOwnProperty.call(walletMap, highlightedWallet)
   ) {
     const wallet = highlightedWallet as keyof typeof walletMap
     return [
